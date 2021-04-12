@@ -533,7 +533,7 @@ export class MatrixEventProcessor {
         embed.setAuthor(
             displayName.substring(0, MAX_NAME_LENGTH),
             avatarUrl,
-            `https://matrix.to/#/${sender}`,
+            ``,
         );
     }
 
