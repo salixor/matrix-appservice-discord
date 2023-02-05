@@ -1208,18 +1208,15 @@ export class DiscordBot {
 
     public async OnMessageReactionAdd(reaction: Discord.MessageReaction, user: Discord.User | Discord.PartialUser) {
         const message = reaction.message;
-        log.info(`Got message reaction add event for ${message.id} with ${reaction.emoji.name}`);
+        const reactionName = reaction.emoji.name;
+        log.verbose(`Got message reaction add event for ${message.id} with ${reactionName}`);
 
         let rooms: string[];
 
         try {
             rooms = await this.channelSync.GetRoomIdsFromChannel(message.channel);
-
-            if (rooms === null) {
-                throw Error();
-            }
         } catch (err) {
-            log.verbose("No bridged rooms to send message to. Oh well.");
+            log.verbose(`No bridged rooms to forward reaction to. Reaction Event: ${reaction}`);
             MetricPeg.get.requestOutcome(message.id, true, "dropped");
             return;
         }
@@ -1233,6 +1230,7 @@ export class DiscordBot {
         });
 
         if (!storeEvent?.Result) {
+            log.verbose(`Received add reaction event for untracked message. Dropping! Reaction Event: ${reaction}`);
             return;
         }
 
@@ -1243,7 +1241,7 @@ export class DiscordBot {
                 const reactionEventId = await intent.underlyingClient.unstableApis.addReactionToEvent(
                     room,
                     matrixIds[0],
-                    reaction.emoji.id ? `:${reaction.emoji.name}:` : reaction.emoji.name
+                    reaction.emoji.id ? `:${reactionName}:` : reactionName
                 );
 
                 const event = new DbEvent();
@@ -1261,7 +1259,7 @@ export class DiscordBot {
 
     public async OnMessageReactionRemove(reaction: Discord.MessageReaction, user: Discord.User | Discord.PartialUser) {
         const message = reaction.message;
-        log.info(`Got message reaction remove event for ${message.id} with ${reaction.emoji.name}`);
+        log.verbose(`Got message reaction remove event for ${message.id} with ${reaction.emoji.name}`);
 
         const intent = this.GetIntentFromDiscordMember(user);
         await intent.ensureRegistered();
@@ -1272,6 +1270,7 @@ export class DiscordBot {
         });
 
         if (!storeEvent?.Result) {
+            log.verbose(`Received remove reaction event for untracked message. Dropping! Reaction Event: ${reaction}`);
             return;
         }
 
@@ -1294,6 +1293,7 @@ export class DiscordBot {
             });
 
             if (!event) {
+                log.verbose(`Received remove reaction event for tracked message where the add reaction event was not bridged. Dropping! Reaction Event: ${reaction}`);
                 return;
             }
 
@@ -1313,13 +1313,14 @@ export class DiscordBot {
     }
 
     public async OnMessageReactionRemoveAll(message: Discord.Message | Discord.PartialMessage) {
-        log.info(`Got message reaction remove all event for ${message.id}`);
+        log.verbose(`Got message reaction remove all event for ${message.id}`);
 
         const storeEvent = await this.store.Get(DbEvent, {
             discord_id: message.id,
         });
 
         if (!storeEvent?.Result) {
+            log.verbose(`Received remove all reaction event for untracked message. Dropping! Event: ${message}`);
             return;
         }
 
@@ -1333,7 +1334,9 @@ export class DiscordBot {
                 "m.annotation"
             );
 
-            await Promise.all(chunk.map(async (event) => {
+            const filteredChunk = chunk.filter((event) => event.sender === this.bridge.botUserId);
+
+            await Promise.all(filteredChunk.map(async (event) => {
                 try {
                     return await underlyingClient.redactEvent(event.room_id, event.event_id);
                 } catch (ex) {
