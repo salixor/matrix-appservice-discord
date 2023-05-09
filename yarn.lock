@@ -215,6 +215,18 @@
     enabled "2.0.x"
     kuler "^2.0.0"
 
+"@deurstann/matrix-discord-parser@1.10.7":
+  version "1.10.7"
+  resolved "https://registry.yarnpkg.com/@deurstann/matrix-discord-parser/-/matrix-discord-parser-1.10.7.tgz#570d0563c3f916faed877cdf6c06be0f3cf607ee"
+  integrity sha512-Ud/KKGkCdsDMoBW2UZNwiR5UNvkmJJJODAmsSQL/vXh9Iz7zfLqnI/cbP4nUrv1Txd5XqGi/pGSNnZ5Kd6AreQ==
+  dependencies:
+    "@mx-puppet/discord-markdown" "2.3.1"
+    escape-html "^1.0.3"
+    got "^11.6.0"
+    highlight.js "^10.4.1"
+    node-html-parser "^1.4.5"
+    unescape-html "^1.1.0"
+
 "@discordjs/collection@^0.1.6":
   version "0.1.6"
   resolved "https://registry.yarnpkg.com/@discordjs/collection/-/collection-0.1.6.tgz#9e9a7637f4e4e0688fd8b2b5c63133c91607682c"
@@ -336,18 +348,6 @@
     highlight.js "^10.4.1"
     node-emoji "^1.10.0"
     simple-markdown "^0.7.2"
-
-"@mx-puppet/matrix-discord-parser@0.1.10":
-  version "0.1.10"
-  resolved "https://gitlab.com/api/v4/projects/35066311/packages/npm/@mx-puppet/matrix-discord-parser/-/@mx-puppet/matrix-discord-parser-0.1.10.tgz#0a37a3f9430ff7c29512d29882e25ae738a31283"
-  integrity sha1-Cjej+UMP98KVEtKYguJa5zijEoM=
-  dependencies:
-    "@mx-puppet/discord-markdown" "2.3.1"
-    escape-html "^1.0.3"
-    got "^11.6.0"
-    highlight.js "^10.4.1"
-    node-html-parser "^1.4.5"
-    unescape-html "^1.1.0"
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
