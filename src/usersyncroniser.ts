@@ -317,7 +317,7 @@ export class UserSyncroniser {
             // for webhooks we append the username to the mxid, as webhooks with the same
             // id can have multiple different usernames set. This way we don't spam
             // userstate changes
-            mxidExtra = "_" + Util.ParseMxid(`@${user.username}`, false).localpart;
+            mxidExtra = "_" + Util.ParseMxid(`@${user.username}`).localpart;
         }
         const guildState: IGuildMemberState = Object.assign({}, DEFAULT_GUILD_STATE, {
             bot: user.bot,

@@ -2,7 +2,7 @@
     "compilerOptions": {
         "module": "commonjs",
         "moduleResolution": "node",
-        "target": "es2016",
+        "target": "es2021",
         "noImplicitAny": false,
         "inlineSourceMap": true,
         "outDir": "./build",
