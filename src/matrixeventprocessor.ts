@@ -391,7 +391,8 @@ export class MatrixEventProcessor {
             if (!sourceEvent || !sourceEvent.content || !sourceEvent.content.body) {
                 throw Error("No content could be found");
             }
-            const replyEmbed = (await this.EventToEmbed(sourceEvent, channel, true)).messageEmbed;
+            const eventToTakeTextFrom = sourceEvent.unsigned?.["m.relations"]?.["m.replace"] ?? sourceEvent;
+            const replyEmbed = (await this.EventToEmbed(eventToTakeTextFrom, channel, true)).messageEmbed;
 
             // if we reply to a discord member, ping them!
             if (this.bridge.isNamespacedUser(sourceEvent.sender)) {
