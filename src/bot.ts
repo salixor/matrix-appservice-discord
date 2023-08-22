@@ -1071,14 +1071,24 @@ export class DiscordBot {
                     msgtype: result.msgtype,
                 };
                 if (msg.reference) {
-                    const storeEvent = await this.store.Get(DbEvent, {discord_id: msg.reference?.messageID})
-                    if (storeEvent && storeEvent.Result)
-                    {
-                        while(storeEvent.Next())
-                        {
+                    const storeEvent = await this.store.Get(DbEvent, { discord_id: msg.reference?.messageID });
+                    if (storeEvent && storeEvent.Result) {
+                        let replyToEventId: string | undefined = undefined;
+                        while (storeEvent.Next()) {
+                            const [eventId] = storeEvent.MatrixId.split(";");
+                            // Try to get the "deepest" event ID if this event replaces another ID
+                            // We need to do this since a m.in_reply_to relation requires the original event ID and not the replacement one
+                            const { chunk } = await intent.underlyingClient.unstableApis.getRelationsForEvent(room, eventId, "m.replace");
+                            if (!!chunk?.length) {
+                                replyToEventId = chunk[0].content['m.relates_to'].event_id;
+                            } else {
+                                replyToEventId ??= eventId;
+                            }
+                        }
+                        if (replyToEventId) {
                             sendContent["m.relates_to"] = {
                                 "m.in_reply_to": {
-                                    event_id: storeEvent.MatrixId.split(";")[0]
+                                    event_id: replyToEventId
                                 }
                             };
                         }
@@ -1098,7 +1108,7 @@ export class DiscordBot {
                         rel_type: "m.replace",
                     };
                 }
-                const trySend = async () =>  intent.sendEvent(room, sendContent);
+                const trySend = async () => intent.sendEvent(room, sendContent);
                 const afterSend = async (eventId) => {
                     this.lastEventIds[room] = eventId;
                     const evt = new DbEvent();

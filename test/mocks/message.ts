@@ -29,11 +29,13 @@ export class MockMessage {
     public guild: Discord.Guild | undefined;
     public author: MockUser;
     public mentions: any = {};
+    public reference?: Discord.MessageReference = undefined;
 
     constructor(
         channel?: Discord.TextChannel,
         content: string = "",
         author: MockUser = new MockUser("123456"),
+        reference = undefined
     ) {
         this.mentions.everyone = false;
         this.channel = channel;
@@ -42,5 +44,6 @@ export class MockMessage {
         }
         this.content = content;
         this.author = author;
+        this.reference = reference;
     }
 }

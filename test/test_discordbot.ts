@@ -16,6 +16,7 @@ limitations under the License.
 
 import { expect } from "chai";
 import * as Proxyquire from "proxyquire";
+import * as Discord from "better-discord.js";
 
 import { MockGuild } from "./mocks/guild";
 import { MockMember } from "./mocks/member";
@@ -107,8 +108,15 @@ describe("DiscordBot", () => {
     describe("OnMessage()", () => {
         const channel = new MockTextChannel();
         const msg = new MockMessage(channel);
-        const author = new MockUser("11111");
+        const msgReply: Discord.MessageReference = {
+            messageID: '111',
+            guildID: '111',
+            channelID: '111',
+        };
+        const authorId = '11111';
+        const author = new MockUser(authorId);
         let HANDLE_COMMAND = false;
+        const roomId = "!asdf:localhost";
         function getDiscordBot() {
             HANDLE_COMMAND = false;
             mockBridge.cleanup();
@@ -122,7 +130,7 @@ describe("DiscordBot", () => {
                 OnUpdateUser: async () => { },
             };
             discord.channelSync = {
-                GetRoomIdsFromChannel: async () => ["!asdf:localhost"],
+                GetRoomIdsFromChannel: async () => [roomId],
             };
             discord.discordCommandHandler = {
                 Process: async () => { HANDLE_COMMAND = true; },
@@ -163,12 +171,95 @@ describe("DiscordBot", () => {
             await discordBot.OnMessage(msg as any);
             mockBridge.getIntent(author.id).wasCalled("sendEvent");
         });
+        describe("sends replies", () => {
+            const originalMxId = "$mAKet_w5WYFCgh1WaHVOvyn9LJLbolFeuELTKVfm0Po";
+            const replacementMxId = "$grdFSE_12LFSELOIFMSOEIJOIJ98kljnfIfESJOIFESO";
+            msg.author = author;
+            msg.content = "Foxies are amazing!";
+            msg.reference = msgReply;
+            it("to a Discord message", async () => {
+                discordBot = getDiscordBot();
+                discordBot.store = {
+                    Get: async (a, b) => {
+                        let storeMockResults = 0;
+                        return Promise.resolve({
+                            Result: true,
+                            MatrixId: `${originalMxId};${roomId}`,
+                            Next: () => storeMockResults-- >= 0
+                        });
+                    },
+                    Insert: async () => { },
+                };
+                const intent = mockBridge.getIntent(author.id);
+                intent.underlyingClient.unstableApis.getRelationsForEvent = async () => ({
+                    chunk: []
+                });
+                await discordBot.OnMessage(msg);
+                mockBridge.getIntent(author.id).wasCalled("sendEvent", true, roomId, {
+                    body: msg.content,
+                    format: "org.matrix.custom.html",
+                    formatted_body: msg.content,
+                    msgtype: 'm.text',
+                    "m.relates_to": {
+                        "m.in_reply_to": {
+                            event_id: originalMxId
+                        }
+                    }
+                });
+            });
+            it("to an edited Discord message", async () => {
+                let storeEventData = { MatrixId: `${originalMxId};${roomId}` };
+                discordBot = getDiscordBot();
+                discordBot.store = {
+                    Get: async (a, b) => {
+                        let storeMockResults = 1;
+                        return Promise.resolve({
+                            Result: true,
+                            ...storeEventData,
+                            Next: () => {
+                                storeEventData = {
+                                    MatrixId: `${replacementMxId};${roomId}`,
+                                }
+                                return storeMockResults-- >= 0;
+                            }
+                        })
+                    },
+                    Insert: async () => { },
+                }
+                const intent = mockBridge.getIntent(author.id);
+                intent.underlyingClient.unstableApis.getRelationsForEvent = async () => ({
+                    chunk: [{
+                        sender: "11111",
+                        room_id: roomId,
+                        event_id: originalMxId,
+                        content: {
+                            "m.relates_to": {
+                                event_id: replacementMxId,
+                                rel_type: 'm.replace'
+                            }
+                        }
+                    }]
+                });
+                await discordBot.OnMessage(msg);
+                mockBridge.getIntent(author.id).wasCalled("sendEvent", true, roomId, {
+                    body: msg.content,
+                    format: "org.matrix.custom.html",
+                    formatted_body: msg.content,
+                    msgtype: 'm.text',
+                    "m.relates_to": {
+                        "m.in_reply_to": {
+                            event_id: replacementMxId
+                        }
+                    }
+                });
+            });
+        });
         it("sends edit messages", async () => {
             discordBot = getDiscordBot();
             msg.author = author;
             msg.content = "Foxies are super amazing!";
             await discordBot.OnMessage(msg, "editevent");
-            mockBridge.getIntent(author.id).wasCalled("sendEvent", true,  "!asdf:localhost", {
+            mockBridge.getIntent(author.id).wasCalled("sendEvent", true, "!asdf:localhost", {
                 "body": "* Foxies are super amazing!",
                 "format": "org.matrix.custom.html",
                 "formatted_body": "* Foxies are super amazing!",
