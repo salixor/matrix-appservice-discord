@@ -1056,141 +1056,143 @@ export class DiscordBot {
         }
         try {
             const intent = this.GetIntentFromDiscordMember(msg.author, msg.webhookID);
-            if (!msg.content && msg.embeds.length === 0) {
+            if (!msg.content && msg.embeds.length === 0 && msg.attachments.array().length === 0) {
                 return;
             }
             const result = await this.discordMsgProcessor.FormatMessage(msg);
-            if (!result.body) {
+            if (!result.body && msg.attachments.array().length === 0) {
                 return;
             }
-            await Util.AsyncForEach(rooms, async (room) => {
-                const sendContent: IMatrixMessage = {
-                    body: result.body,
-                    format: "org.matrix.custom.html",
-                    formatted_body: result.formattedBody,
-                    msgtype: result.msgtype,
-                };
-                if (msg.reference) {
-                    const storeEvent = await this.store.Get(DbEvent, { discord_id: msg.reference?.messageID });
-                    if (storeEvent && storeEvent.Result) {
-                        let replyToEventId: string | undefined = undefined;
-                        while (storeEvent.Next()) {
-                            const [eventId] = storeEvent.MatrixId.split(";");
-                            // Try to get the "deepest" event ID if this event replaces another ID
-                            // We need to do this since a m.in_reply_to relation requires the original event ID and not the replacement one
-                            const { chunk } = await intent.underlyingClient.unstableApis.getRelationsForEvent(room, eventId, "m.replace");
-                            if (!!chunk?.length) {
-                                replyToEventId = chunk[0].content['m.relates_to'].event_id;
-                            } else {
-                                replyToEventId ??= eventId;
-                            }
-                        }
-                        if (replyToEventId) {
-                            sendContent["m.relates_to"] = {
-                                "m.in_reply_to": {
-                                    event_id: replyToEventId
-                                }
-                            };
-                        }
-                    }
-                }
-                if (editEventId) {
-                    sendContent.body = `* ${result.body}`;
-                    sendContent.formatted_body = `* ${result.formattedBody}`;
-                    sendContent["m.new_content"] = {
+            if(result.body){
+                await Util.AsyncForEach(rooms, async (room) => {
+                    const sendContent: IMatrixMessage = {
                         body: result.body,
                         format: "org.matrix.custom.html",
                         formatted_body: result.formattedBody,
                         msgtype: result.msgtype,
                     };
-                    sendContent["m.relates_to"] = {
-                        event_id: editEventId,
-                        rel_type: "m.replace",
-                    };
-                }
-                const trySend = async () => intent.sendEvent(room, sendContent);
-                const afterSend = async (eventId) => {
-                    this.lastEventIds[room] = eventId;
-                    const evt = new DbEvent();
-                    evt.MatrixId = `${eventId};${room}`;
-                    evt.DiscordId = msg.id;
-                    evt.ChannelId = msg.channel.id;
-                    if (msg.guild) {
-                        evt.GuildId = msg.guild.id;
-                    }
-                    await this.store.Insert(evt);
-                    this.userActivity.updateUserActivity(intent.userId);
-                };
-                let res;
-                try {
-                    res = await trySend();
-                    await afterSend(res);
-                } catch (e) {
-                    if (e.errcode !== "M_FORBIDDEN" && e.errcode !==  "M_GUEST_ACCESS_FORBIDDEN") {
-                        log.error("Failed to send message into room.", e);
-                        return;
-                    }
-                    if (msg.member && !msg.webhookID) {
-                        await this.userSync.JoinRoom(msg.member, room);
-                    } else {
-                        await this.userSync.JoinRoom(msg.author, room, Boolean(msg.webhookID));
-                    }
-                    res = await trySend();
-                    await afterSend(res);
-                }
-                // Check Attachements
-                if (!editEventId) {
-                    // on discord you can't edit in images, you can only edit text
-                    // so it is safe to only check image upload stuff if we don't have
-                    // an edit
-                    await Util.AsyncForEach(msg.attachments.array(), async (attachment) => {
-                        const content = await Util.DownloadFile(attachment.url);
-                        const fileMime = content.mimeType || mime.getType(attachment.name || "")
-                            || "application/octet-stream";
-                        const mxcUrl = await intent.underlyingClient.uploadContent(
-                            content.buffer,
-                            fileMime,
-                            attachment.name || "",
-                        );
-                        const type = fileMime.split("/")[0];
-                        let msgtype = {
-                            audio: "m.audio",
-                            image: "m.image",
-                            video: "m.video",
-                        }[type];
-                        if (!msgtype) {
-                            msgtype = "m.file";
-                        }
-                        const info = {
-                            mimetype: fileMime,
-                            size: attachment.size,
-                        } as IMatrixMediaInfo;
-                        if (msgtype === "m.image" || msgtype === "m.video") {
-                            info.w = attachment.width!;
-                            info.h = attachment.height!;
-                        }
-                        await Util.AsyncForEach(rooms, async (room) => {
-                            const eventId = await intent.sendEvent(room, {
-                                body: attachment.name || "file",
-                                external_url: attachment.url,
-                                info,
-                                msgtype,
-                                url: mxcUrl,
-                            });
-                            this.lastEventIds[room] = eventId;
-                            const evt = new DbEvent();
-                            evt.MatrixId = `${eventId};${room}`;
-                            evt.DiscordId = msg.id;
-                            evt.ChannelId = msg.channel.id;
-                            if (msg.guild) {
-                                evt.GuildId = msg.guild.id;
+                    if (msg.reference) {
+                        const storeEvent = await this.store.Get(DbEvent, { discord_id: msg.reference?.messageID });
+                        if (storeEvent && storeEvent.Result) {
+                            let replyToEventId: string | undefined = undefined;
+                            while (storeEvent.Next()) {
+                                const [eventId] = storeEvent.MatrixId.split(";");
+                                // Try to get the "deepest" event ID if this event replaces another ID
+                                // We need to do this since a m.in_reply_to relation requires the original event ID and not the replacement one
+                                const { chunk } = await intent.underlyingClient.unstableApis.getRelationsForEvent(room, eventId, "m.replace");
+                                if (!!chunk?.length) {
+                                    replyToEventId = chunk[0].content['m.relates_to'].event_id;
+                                } else {
+                                    replyToEventId ??= eventId;
+                                }
                             }
-                            await this.store.Insert(evt);
-                            this.userActivity.updateUserActivity(intent.userId);
+                            if (replyToEventId) {
+                                sendContent["m.relates_to"] = {
+                                    "m.in_reply_to": {
+                                        event_id: replyToEventId
+                                    }
+                                };
+                            }
+                        }
+                    }
+                    if (editEventId) {
+                        sendContent.body = `* ${result.body}`;
+                        sendContent.formatted_body = `* ${result.formattedBody}`;
+                        sendContent["m.new_content"] = {
+                            body: result.body,
+                            format: "org.matrix.custom.html",
+                            formatted_body: result.formattedBody,
+                            msgtype: result.msgtype,
+                        };
+                        sendContent["m.relates_to"] = {
+                            event_id: editEventId,
+                            rel_type: "m.replace",
+                        };
+                    }
+                    const trySend = async () =>  intent.sendEvent(room, sendContent);
+                    const afterSend = async (eventId) => {
+                        this.lastEventIds[room] = eventId;
+                        const evt = new DbEvent();
+                        evt.MatrixId = `${eventId};${room}`;
+                        evt.DiscordId = msg.id;
+                        evt.ChannelId = msg.channel.id;
+                        if (msg.guild) {
+                            evt.GuildId = msg.guild.id;
+                        }
+                        await this.store.Insert(evt);
+                        this.userActivity.updateUserActivity(intent.userId);
+                    };
+                    let res;
+                    try {
+                        res = await trySend();
+                        await afterSend(res);
+                    } catch (e) {
+                        if (e.errcode !== "M_FORBIDDEN" && e.errcode !==  "M_GUEST_ACCESS_FORBIDDEN") {
+                            log.error("Failed to send message into room.", e);
+                            return;
+                        }
+                        if (msg.member && !msg.webhookID) {
+                            await this.userSync.JoinRoom(msg.member, room);
+                        } else {
+                            await this.userSync.JoinRoom(msg.author, room, Boolean(msg.webhookID));
+                        }
+                        res = await trySend();
+                        await afterSend(res);
+                    }
+                });
+            }
+            // Check Attachements
+            if (!editEventId) {
+                // on discord you can't edit in images, you can only edit text
+                // so it is safe to only check image upload stuff if we don't have
+                // an edit
+                await Util.AsyncForEach(msg.attachments.array(), async (attachment) => {
+                    const content = await Util.DownloadFile(attachment.url);
+                    const fileMime = content.mimeType || mime.getType(attachment.name || "")
+                        || "application/octet-stream";
+                    const mxcUrl = await intent.underlyingClient.uploadContent(
+                        content.buffer,
+                        fileMime,
+                        attachment.name || "",
+                    );
+                    const type = fileMime.split("/")[0];
+                    let msgtype = {
+                        audio: "m.audio",
+                        image: "m.image",
+                        video: "m.video",
+                    }[type];
+                    if (!msgtype) {
+                        msgtype = "m.file";
+                    }
+                    const info = {
+                        mimetype: fileMime,
+                        size: attachment.size,
+                    } as IMatrixMediaInfo;
+                    if (msgtype === "m.image" || msgtype === "m.video") {
+                        info.w = attachment.width!;
+                        info.h = attachment.height!;
+                    }
+                    await Util.AsyncForEach(rooms, async (room) => {
+                        const eventId = await intent.sendEvent(room, {
+                            body: attachment.name || "file",
+                            external_url: attachment.url,
+                            info,
+                            msgtype,
+                            url: mxcUrl,
                         });
+                        this.lastEventIds[room] = eventId;
+                        const evt = new DbEvent();
+                        evt.MatrixId = `${eventId};${room}`;
+                        evt.DiscordId = msg.id;
+                        evt.ChannelId = msg.channel.id;
+                        if (msg.guild) {
+                            evt.GuildId = msg.guild.id;
+                        }
+                        await this.store.Insert(evt);
+                        this.userActivity.updateUserActivity(intent.userId);
                     });
-                }
-            });
+                });
+            }
             MetricPeg.get.requestOutcome(msg.id, true, "success");
         } catch (err) {
             MetricPeg.get.requestOutcome(msg.id, true, "fail");
