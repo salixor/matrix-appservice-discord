@@ -1210,6 +1210,9 @@ export class DiscordBot {
         if (storeEvent && storeEvent.Result) {
             while (storeEvent.Next()) {
                 const matrixIds = storeEvent.MatrixId.split(";");
+                if(!oldMsg.content && oldMsg.attachments.array().length>0){
+                    newMsg.content = newMsg.content + " " + oldMsg.attachments.array()[0].url;
+                }
                 await this.OnMessage(newMsg, matrixIds[0]);
                 return;
             }
